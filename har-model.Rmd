@@ -1,0 +1,67 @@
+---
+title: "Human Activity Recognition"
+author: "Mike Huang"
+date: "09/27/2015"
+output: html_document
+---
+
+#Executive Summary
+Several devices on the market records a wide range of measurements on various body movements to track activity. This can provide valuable data to improve the management of physical activity. This study aims to create a prediction algorithm to accurately classify movement activity. First the data was loaded and the variables that aren't valid predictors or missing significant data was removed. A Random Forest was determined to be the optimal model for maximizing prediction accuracy. A cross-validation with 70% of the data as the training set and 30% as the test set yielded a prediction 100% accuracy and an out-of-bag error rate of 0.31%. 
+
+# Data Gathering and Cleaning
+The data comes from the following source. http://groupware.les.inf.puc-rio.br/har Sensors are placed on the arms, wrists, belt, and dumbells to measure motion in three dimensions. Data from these sensors are associated with the following five activities:
+
+1. Sitting
+2. Sitting down
+3. Standing
+4. Standing up
+5. Walking
+
+The variables with missing data and the variables that do not pertain to the sensor recordings are removed. The following variables remain and are used as predictors. 
+```{r echo=FALSE, cache=FALSE, warning=FALSE, results=FALSE, message=FALSE}
+setwd('~/Documents/machinelearningassignment')
+train<-read.csv('pml-training.csv')
+test<-read.csv('pml-testing.csv')
+library(caret)
+library(doMC)
+library(dplyr)
+library(randomForest)
+registerDoMC(cores=6)
+```
+```{r echo=FALSE}
+test.noNa<-test[,colSums(is.na(test))==0]
+test.noNa<-select(test.noNa,-c(X,user_name,problem_id,cvtd_timestamp,new_window,num_window,raw_timestamp_part_1,raw_timestamp_part_2,roll_belt))
+train.noNa<-subset(train,select=c(names(test.noNa),'classe'))
+inTrain<-createDataPartition(y=train.noNa$classe,p=0.7,list=FALSE)
+training<-train.noNa[inTrain,]
+testing<-train.noNa[-inTrain,]
+names(test.noNa)
+```
+
+The outcome used for classification is the "classe" variable. 
+
+The training data is split 70:30 for cross validation. 70% is used for training and 30% is used for validation.
+
+# Model Selection
+Given the large number of variables, and many that may be dependent on each other, Random Forest becomes an ideal model. It bootstraps samples and variables, hence accounting for many common issues with modeling including strong collinearity between variables and overfitting. This is because each tree in the forest have an out of bag rate of 30%, and with a total of 500 trees in the model, that means there are 500 random combinations of variables where only 70% of the variables are sampled. The bootstrapping of samples also works to prevent overfitting since the model doesn't favor any cluster of samples. 
+
+The randomForest algorithm was generated from the library, randomForest. This provided vastly better performance than the caret model. Where the caret model took 42 minutes on all 6 cores of a Xeon Westmere-EP running at 3.6GHz, the randomForest model took a mere 59 seconds on a single core. 
+
+```{r echo=FALSE}
+set.seed(12345)
+modelr<-randomForest(classe~.,data=train.noNa,mtry=sqrt(length(test.noNa)),ntree=500)
+modelr
+```
+
+# Cross-Validation
+```{r echo=FALSE}
+confusionMatrix(predict(modelr,testing),testing$classe)
+```
+
+The model shows a high prediction accuracy of 100% in the cross-validation with an out-of-bag error rate of 0.31%.
+
+# Final Prediction of Test Set
+The model obtained a 100% prediction accuracy of the 20 cases in the test set.
+```{r echo=FALSE}
+answers<-predict(modelr,test.noNa)
+```
